@@ -12,6 +12,11 @@
     .summary ul { list-style: disc; padding-left: 20px; }
     .summary li { margin-bottom: 6px; line-height: 1.5; }
     .summary p { margin-top: 16px; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f5f5f5; }
+    .raw-xml { white-space: pre-wrap; overflow: auto; max-height: 400px; background: #f9f9f9; border: 1px solid #ddd; padding: 12px; font-size: 13px; }
+    .disclaimer { margin-top: 24px; font-style: italic; color: #666; }
   </style>
 </head>
 <body>
@@ -24,6 +29,12 @@
 <div id="output"></div>
 
 <script>
+function escapeHTML(str) {
+  return str.replace(/[&<>'"]/g,
+    tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag])
+  );
+}
+
 document.getElementById('fileInput').addEventListener('change', function(event) {
   const file = event.target.files[0];
   const reader = new FileReader();
@@ -42,12 +53,17 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
     let bothPass = 0;
     const allIPs = new Set();
     const passIPs = new Set();
+    const allRows = [];
+    const failedIPMap = new Map();
 
     for (let i = 0; i < records.length; i++) {
       const count = parseInt(records[i].getElementsByTagName("count")[0]?.textContent || 0);
       const spf = records[i].getElementsByTagName("spf")[0]?.textContent;
       const dkim = records[i].getElementsByTagName("dkim")[0]?.textContent;
       const sourceIP = records[i].getElementsByTagName("source_ip")[0]?.textContent;
+      const disposition = records[i].querySelector("policy_evaluated > disposition")?.textContent || "none";
+
+      allRows.push({ sourceIP, count, spf, dkim, disposition });
 
       total += count;
       if (spf === "pass") spfPass += count;
@@ -56,6 +72,12 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
       if (spf === "pass" && dkim === "pass") {
         bothPass += count;
         if (sourceIP) passIPs.add(sourceIP);
+      } else if (sourceIP) {
+        if (failedIPMap.has(sourceIP)) {
+          failedIPMap.get(sourceIP).count += count;
+        } else {
+          failedIPMap.set(sourceIP, { count, spf, dkim, disposition });
+        }
       }
       if (sourceIP) allIPs.add(sourceIP);
     }
@@ -112,12 +134,33 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
     if (spfRate < 80 || dkimRate < 80) riskClass = "red";
     else if (spfRate < 95 || dkimRate < 95) riskClass = "yellow";
 
+    let failedIPHTML = '';
+    if (failedIPMap.size === 0) {
+      failedIPHTML = '<p>No authentication failures detected in this report.</p>';
+    } else {
+      const failedRows = Array.from(failedIPMap.entries())
+        .map(([ip, d]) => `<tr><td>${escapeHTML(ip)}</td><td>${d.count}</td><td>${escapeHTML(d.spf || 'N/A')}</td><td>${escapeHTML(d.dkim || 'N/A')}</td><td>${escapeHTML(d.disposition)}</td></tr>`)
+        .join('');
+      failedIPHTML = `<table>
+        <thead><tr><th>Source IP</th><th>Total Messages</th><th>SPF Result</th><th>DKIM Result</th><th>Disposition</th></tr></thead>
+        <tbody>${failedRows}</tbody>
+      </table>`;
+    }
+
+    const allRecordRows = allRows
+      .map(r => `<tr><td>${escapeHTML(r.sourceIP || 'N/A')}</td><td>${r.count}</td><td>${escapeHTML(r.spf || 'N/A')}</td><td>${escapeHTML(r.dkim || 'N/A')}</td><td>${escapeHTML(r.disposition)}</td></tr>`)
+      .join('');
+
+    const rawXML = escapeHTML(e.target.result);
+
     document.getElementById("output").innerHTML = `
       <h2>Summary of Findings</h2>
       <div class="card summary">
         <ul>${summaryBullets}</ul>
         ${interpretationHTML}
       </div>
+
+      <h2>Authentication Overview</h2>
       <div class="card">
         <strong>Domain:</strong> ${domain}<br/>
         <strong>Total Messages:</strong> ${total}<br/>
@@ -125,6 +168,26 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
         <strong>DKIM Pass Rate:</strong> ${dkimRate}%<br/>
         <strong class="${riskClass}">Risk Level: ${riskClass.toUpperCase()}</strong>
       </div>
+
+      <h2>Failed Authentication &mdash; Unique Sending IPs</h2>
+      <div class="card">
+        ${failedIPHTML}
+      </div>
+
+      <h2>All Records</h2>
+      <div class="card">
+        <table>
+          <thead><tr><th>Source IP</th><th>Count</th><th>SPF</th><th>DKIM</th><th>Disposition</th></tr></thead>
+          <tbody>${allRecordRows}</tbody>
+        </table>
+      </div>
+
+      <h2>Raw DMARC Report</h2>
+      <div class="card">
+        <pre class="raw-xml">${rawXML}</pre>
+      </div>
+
+      <p class="disclaimer">This report summarizes authentication results only and does not determine intent or threat level.</p>
     `;
   };
 
