@@ -16,3 +16,7 @@ The output presents:
 The purpose is to reduce unnecessary technical escalations by giving stakeholders a clear, calm interpretation of DMARC reports without involving the engineering team.
 
 Scope is intentionally minimal: upload, parse, render, done.
+
+## License
+
+Code is licensed under [MIT](LICENSE.md). Sprint19 name and branding may not be used without permission.
