@@ -9,6 +9,9 @@
     .green { color: green; }
     .yellow { color: orange; }
     .red { color: red; }
+    .summary ul { list-style: disc; padding-left: 20px; }
+    .summary li { margin-bottom: 6px; line-height: 1.5; }
+    .summary p { margin-top: 16px; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -30,30 +33,91 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
     const xmlDoc = parser.parseFromString(e.target.result, "application/xml");
 
     const domain = xmlDoc.getElementsByTagName("domain")[0]?.textContent || "N/A";
+    const policy = xmlDoc.querySelector("policy_published > p")?.textContent || "none";
     const records = xmlDoc.getElementsByTagName("record");
 
     let total = 0;
     let spfPass = 0;
     let dkimPass = 0;
+    let bothPass = 0;
+    const allIPs = new Set();
+    const passIPs = new Set();
 
     for (let i = 0; i < records.length; i++) {
       const count = parseInt(records[i].getElementsByTagName("count")[0]?.textContent || 0);
       const spf = records[i].getElementsByTagName("spf")[0]?.textContent;
       const dkim = records[i].getElementsByTagName("dkim")[0]?.textContent;
+      const sourceIP = records[i].getElementsByTagName("source_ip")[0]?.textContent;
 
       total += count;
       if (spf === "pass") spfPass += count;
       if (dkim === "pass") dkimPass += count;
+
+      if (spf === "pass" && dkim === "pass") {
+        bothPass += count;
+        if (sourceIP) passIPs.add(sourceIP);
+      }
+      if (sourceIP) allIPs.add(sourceIP);
     }
+
+    const failCount = total - bothPass;
+    const uniqueIPs = allIPs.size;
+    const passingIPs = passIPs.size;
 
     const spfRate = total ? ((spfPass / total) * 100).toFixed(1) : 0;
     const dkimRate = total ? ((dkimPass / total) * 100).toFixed(1) : 0;
+    const failRate = total ? (failCount / total) * 100 : 0;
+
+    const policyLabels = { none: "monitoring only", quarantine: "quarantine", reject: "reject" };
+    const policyLabel = policyLabels[policy] || policy;
+
+    const summaryLines = [];
+    if (total > 0) {
+      summaryLines.push(`${total} total messages were evaluated in this report.`);
+    }
+    if (failCount > 0) {
+      summaryLines.push(`${failCount} messages failed DMARC authentication checks.`);
+    }
+    if (bothPass > 0) {
+      summaryLines.push(`${bothPass} messages passed both SPF and DKIM.`);
+    }
+    if (uniqueIPs > 0) {
+      summaryLines.push(`${uniqueIPs} unique sending IP addresses were detected.`);
+    }
+    const ipPrefix = (uniqueIPs > 1 && passingIPs <= 1) ? "Only " : "";
+    summaryLines.push(`${ipPrefix}${passingIPs} IP address${passingIPs === 1 ? "" : "es"} passed authentication.`);
+    summaryLines.push(`The current DMARC policy is set to <strong>p=${policy} (${policyLabel})</strong>.`);
+
+    let interpretation = "";
+    if (failRate > 50) {
+      interpretation = "Overall, most messages claiming to be from this domain did not pass authentication";
+      if (policy === "none") {
+        interpretation += ", and the current policy does not automatically block failed messages.";
+      } else {
+        interpretation += ".";
+      }
+    } else if (failRate < 10) {
+      interpretation = "Most messages passed authentication successfully.";
+      if (policy === "none") {
+        interpretation += " The current policy monitors authentication results but does not automatically block failed messages.";
+      }
+    } else if (policy === "none") {
+      interpretation = "The current policy monitors authentication results but does not automatically block failed messages.";
+    }
+
+    const summaryBullets = summaryLines.map(line => `<li>${line}</li>`).join("");
+    const interpretationHTML = interpretation ? `<p>${interpretation}</p>` : "";
 
     let riskClass = "green";
     if (spfRate < 80 || dkimRate < 80) riskClass = "red";
     else if (spfRate < 95 || dkimRate < 95) riskClass = "yellow";
 
     document.getElementById("output").innerHTML = `
+      <h2>Summary of Findings</h2>
+      <div class="card summary">
+        <ul>${summaryBullets}</ul>
+        ${interpretationHTML}
+      </div>
       <div class="card">
         <strong>Domain:</strong> ${domain}<br/>
         <strong>Total Messages:</strong> ${total}<br/>
