@@ -2,7 +2,16 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>DMARC Reader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A privacy-first, browser-based DMARC aggregate report reader. Upload your XML and receive a clear, structured interpretation. No data leaves your browser. Built by Sprint19.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://dmarc-reader.sprint19.com">
+  <meta property="og:title" content="DMARC XML Reader — Built by Sprint19">
+  <meta property="og:description" content="Upload your DMARC XML and receive a clear, structured interpretation. No data leaves your browser.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dmarc-reader.sprint19.com">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <title>DMARC XML Reader – Clear, Local Report Interpretation | Sprint19</title>
   <style>
     body { font-family: Arial; max-width: 800px; margin: 40px auto; }
     .card { border: 1px solid #ddd; padding: 20px; margin-bottom: 20px; }
@@ -19,6 +28,13 @@
     .disclaimer { margin-top: 24px; font-style: italic; color: #666; }
     .print-btn { margin-top: 24px; padding: 10px 24px; font-size: 16px; cursor: pointer; }
     .report-timestamp { color: #666; font-size: 14px; margin-bottom: 16px; }
+    .report-source { color: #999; font-size: 13px; margin-bottom: 20px; }
+    .site-footer { text-align: center; color: #999; font-size: 13px; margin-top: 48px; padding-bottom: 24px; }
+    .site-footer hr { border: none; border-top: 1px solid #ddd; margin-bottom: 16px; }
+    .site-footer p { margin: 4px 0; }
+    .site-footer a { color: #666; text-decoration: none; }
+    .site-footer a:hover { text-decoration: underline; }
+    .site-footer .guardrail { font-style: italic; font-size: 12px; color: #aaa; margin-top: 12px; }
 
     @media print {
       input, button {
@@ -38,17 +54,27 @@
         white-space: pre-wrap;
         word-wrap: break-word;
       }
+      .site-footer {
+        display: block !important;
+      }
     }
   </style>
 </head>
 <body>
 
 <h1>DMARC XML Reader</h1>
-<p>This tool processes your report locally in your browser. Nothing is uploaded.</p>
+<p>Structured interpretation. No speculation. No data leaves your browser.</p>
 
 <input type="file" id="fileInput" accept=".xml" />
 
 <div id="output"></div>
+
+<footer class="site-footer">
+  <hr>
+  <p>Generated locally in your browser.</p>
+  <p>Built by <a href="https://sprint19.com" target="_blank" rel="noopener noreferrer">Sprint19</a>. Product engineering for startups.</p>
+  <p class="guardrail">This tool provides interpretation of DMARC aggregate reports and does not perform security assessment.</p>
+</footer>
 
 <script>
 function escapeHTML(str) {
@@ -179,6 +205,7 @@ document.getElementById('fileInput').addEventListener('change', function(event) 
 
     document.getElementById("output").innerHTML = `
       <p class="report-timestamp"><strong>${escapeHTML(file.name)}</strong> &mdash; Generated on: ${generatedAt}</p>
+      <p class="report-source">This summary is generated from the DMARC aggregate report provided.</p>
       <h2>Summary of Findings</h2>
       <div class="card summary">
         <ul>${summaryBullets}</ul>
